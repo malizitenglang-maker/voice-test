@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>読み上げ・音声認識テスト</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#111;--mut:#666;--bd:#ccc;--ac:#0a64d8;--ok:#0a7a2f;--ng:#c0261b}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--bd:#444;--ac:#4c9bff;--ok:#4fd37d;--ng:#ff6b5e}}
+*{box-sizing:border-box}
+body{margin:0;padding:12px max(12px,env(safe-area-inset-right)) 40px max(12px,env(safe-area-inset-left));background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,"Hiragino Sans",sans-serif}
+h1{font-size:19px;margin:4px 0 8px}h2{font-size:16px;margin:0 0 8px}
+section{border:1px solid var(--bd);border-radius:10px;padding:10px;margin:10px 0}
+button{min-height:44px;padding:0 14px;font-size:16px;border:1px solid var(--ac);background:transparent;color:var(--ac);border-radius:8px;margin:3px 3px 3px 0}
+.row{display:flex;gap:6px}.row>button{flex:1;font-weight:bold}
+input[type=text],select{width:100%;min-height:44px;font-size:16px;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--fg)}
+.res{font-size:14px;color:var(--mut);margin:2px 0 8px;word-break:break-all}
+.res.ok{color:var(--ok)}.res.ng{color:var(--ng)}
+table{font-size:13px;border-collapse:collapse;width:100%}td{border-bottom:1px solid var(--bd);padding:2px 4px;vertical-align:top;word-break:break-all}
+pre{font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto;border:1px solid var(--bd);padding:6px;border-radius:8px}
+.big{font-size:20px;font-weight:bold}
+</style></head><body>
+<h1>読み上げ・音声認識テスト</h1>
+<button id="bStop">⏹ 停止</button>
+
+<section><h2>環境</h2><table id="env"></table></section>
+
+<section><h2>状態（実際に起きたことだけ表示）</h2>
+<div id="s1" class="res">読み上げ: 未実行</div>
+<div id="s2" class="res">マイク取得: 未実行</div>
+<div id="s3" class="res">音声認識: 未実行</div></section>
+
+<section><h2>A. 曲名を読み上げて確認</h2>
+曲名（自由に入力）<input type="text" id="t" value="Le temps des fleurs" autocomplete="off">
+<div>
+<button class="p">Le temps des fleurs</button><button class="p">Mémoire Antique</button><button class="p">Voice of Sword</button><button class="p">ONLY YOUR STARS!</button>
+</div>
+読み上げの言語<select id="lang"><option value="">自動判定</option><option value="ja-JP">日本語</option><option value="en-US">英語</option><option value="fr-FR">フランス語</option></select>
+<button id="bGo" style="margin-top:6px;width:100%">▶ 読み上げ →「これですか？」→ 聞き取り</button>
+<label><input type="checkbox" id="auto" checked> 読み上げ後に自動で聞き取りを開始</label>
+<div id="heard" class="res"></div><div id="ans" class="big"></div>
+<div class="row"><button id="bYes">はい</button><button id="bNo">違う</button></div>
+<button id="bListen">🎤 聞き取りだけ開始（ボタン操作で開始）</button>
+</section>
+
+<section><h2>B. 個別テスト</h2>
+<button id="bTTS">読み上げのみ</button>
+<button id="bMic">マイク取得のみ</button>
+<button id="bSR">音声認識のみ</button>
+<div id="rB" class="res">未実行</div></section>
+
+<section><h2>ログ</h2><pre id="log"></pre></section>
+
+<script>
+const $=id=>document.getElementById(id);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const log=m=>{$('log').textContent=new Date().toLocaleTimeString()+' '+m+'\n'+$('log').textContent.slice(0,6000)};
+const st=(id,c,m)=>{$(id).className='res '+c;$(id).textContent=m};
+const CAUSE={
+'not-allowed':'マイクまたは音声認識が許可されていません。考えられる原因：Safariのサイト別マイク設定／iOSの音声入力（Dictation）やSiriがオフ／iframe内／HTTPSでない／ボタン操作以外からの開始。',
+'service-not-allowed':'音声認識サービスが許可されていません。iOSの音声入力（Dictation）／Siriがオフの可能性。',
+'no-speech':'音声が検出されませんでした。','audio-capture':'マイクを取得できません。','network':'音声認識サービスに接続できません。',
+'aborted':'中断されました。','language-not-supported':'言語に対応していません。','unsupported':'このブラウザには音声認識APIがありません。',
+'timeout':'一定時間、認識結果が得られませんでした。','no-result':'結果が得られないまま終了しました。',
+'NotAllowedError':'マイクが拒否されました（許可設定・HTTPS・iframe内を確認）。','NotFoundError':'マイクが見つかりません。',
+'NotReadableError':'マイクが他で使用中の可能性。','InvalidStateError':'認識がすでに開始されている可能性。'};
+const errText=e=>`${e.name}${e.message?'（'+e.message+'）':''}：${CAUSE[e.name]||'原因を特定できません。'}`;
+
+(function(){const r=[['HTTPS（安全なコンテキスト）',isSecureContext],['プロトコル',location.protocol],['iframe内',top!==self],
+['speechSynthesis（読み上げ）',!!window.speechSynthesis],['getUserMedia（マイク）',!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)],
+['音声認識API',SR?(window.SpeechRecognition?'SpeechRecognition':'webkitSpeechRecognition'):'なし（利用不可）'],['UA',navigator.userAgent]];
+$('env').innerHTML=r.map(x=>`<tr><td>${x[0]}</td><td>${typeof x[1]==='boolean'?(x[1]?'はい':'いいえ'):x[1]}</td></tr>`).join('')})();
+
+const langOf=s=>/[\u3040-\u30ff\u4e00-\u9fff]/.test(s)?'ja-JP':/[àâçéèêëîïôùûüÿœæ]/i.test(s)?'fr-FR':'en-US';
+function speak(text,lang){return new Promise((res,rej)=>{
+ if(!window.speechSynthesis)return rej(new Error('speechSynthesis非対応'));
+ speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=lang||langOf(text);
+ const v=speechSynthesis.getVoices().find(v=>v.lang.replace('_','-')===u.lang);if(v)u.voice=v;
+ const to=setTimeout(()=>rej(new Error('onendが20秒来ませんでした')),20000);
+ u.onstart=()=>log('TTS start ['+u.lang+(v?' / '+v.name:' / 音声指定なし')+'] '+text);
+ u.onend=()=>{clearTimeout(to);log('TTS end');res()};
+ u.onerror=e=>{clearTimeout(to);rej(new Error('TTSエラー: '+(e.error||'不明')))};
+ speechSynthesis.speak(u)})}
+
+let curRec=null,flow=0;
+function listen(o={}){return new Promise((resolve,reject)=>{
+ if(!SR)return reject({name:'unsupported'});
+ const r=new SR();curRec=r;r.lang='ja-JP';r.interimResults=true;r.maxAlternatives=5;r.continuous=false;
+ let done=false;
+ const fin=(v,err)=>{if(done)return;done=true;clearTimeout(t);try{r.abort()}catch(e){}err?reject(err):resolve(v)};
+ const t=setTimeout(()=>fin(null,{name:'timeout'}),9000);
+ r.onstart=()=>{log('認識 start');st('s3','','音声認識: 開始（start受信）')};
+ r.onaudiostart=()=>{log('認識 audiostart');st('s3','','音声認識: マイク音声の取得開始（audiostart受信）')};
+ r.onspeechstart=()=>log('認識 speechstart');
+ r.onresult=e=>{const x=e.results[e.results.length-1];const a=[...x].map(y=>y.transcript);o.onInterim&&o.onInterim(a[0]);if(x.isFinal)fin({alts:a,conf:x[0].confidence})};
+ r.onerror=e=>{log('認識 error: '+e.error);fin(null,{name:e.error,message:e.message})};
+ r.onend=()=>{log('認識 end');fin(null,{name:'no-result'})};
+ try{r.start()}catch(e){fin(null,{name:e.name,message:e.message})}})}
+
+const YES=/^(はい|ハイ|yes|うん|ええ|そう|オッケー|ok)/i,NO=/(違|ちが|チガ|いいえ|イイエ|ノー|no|だめ|ダメ)/i;
+const judge=al=>{for(const a of al){const s=a.replace(/\s/g,'');if(NO.test(s))return 'no';if(YES.test(s))return 'yes'}return null};
+const stopAll=()=>{flow++;try{speechSynthesis.cancel()}catch(e){}try{curRec&&curRec.abort()}catch(e){}};
+$('bStop').onclick=()=>{stopAll();log('停止')};
+
+const say=async(text,lang)=>{st('s1','','読み上げ: 実行中…');
+ try{await speak(text,lang);st('s1','ok','読み上げ: 終了イベント受信（音が出たかは耳で確認）');return true}
+ catch(e){st('s1','ng','読み上げ: 失敗 — '+e.message);return false}};
+
+const setAns=j=>{$('ans').textContent=j==='yes'?'→ はい（この曲で確定）':j==='no'?'→ 違う（次の候補へ）':''};
+async function hear(id){
+ if(!SR){st('s3','ng','音声認識: 利用不可（APIなし）。「はい」「違う」ボタンを使ってください。');return}
+ st('s3','','音声認識: 起動中…「はい」か「違う」と言ってください');
+ try{const r=await listen({onInterim:t=>$('heard').textContent='認識中: '+t});if(id!==flow)return;
+  $('heard').textContent='認識結果: '+r.alts.join(' / ')+(r.conf?`（信頼度 ${r.conf.toFixed(2)}）`:'');
+  const j=judge(r.alts);setAns(j);
+  st('s3',j?'ok':'ng',j?'音声認識: 成功し、「はい／違う」を判定':'音声認識: 認識はできたが「はい／違う」と判定できず')}
+ catch(e){if(id!==flow)return;st('s3','ng','音声認識: 失敗 — '+errText(e))}}
+
+$('bGo').onclick=async()=>{stopAll();const id=flow;setAns(null);$('heard').textContent='';
+ const t=$('t').value.trim();if(!t)return st('s1','ng','曲名を入力してください');
+ if(!await say(t,$('lang').value||undefined))return;if(id!==flow)return;
+ if(!await say('これですか？','ja-JP'))return;if(id!==flow)return;
+ if($('auto').checked)hear(id);else st('s3','','音声認識: 自動開始はオフ。「🎤 聞き取りだけ開始」を押してください')};
+$('bListen').onclick=()=>{stopAll();hear(flow)};
+$('bYes').onclick=()=>{stopAll();setAns('yes');log('ボタン: はい')};
+$('bNo').onclick=()=>{stopAll();setAns('no');log('ボタン: 違う')};
+document.querySelectorAll('.p').forEach(b=>b.onclick=()=>{$('t').value=b.textContent});
+
+$('bTTS').onclick=async()=>{const ja=(window.speechSynthesis?speechSynthesis.getVoices():[]).filter(v=>v.lang.replace('_','-').startsWith('ja'));
+ const ok=await say('読み上げテストです。');$('rB').className='res '+(ok?'ok':'ng');$('rB').textContent='日本語音声 '+ja.length+'件'+(ja[0]?'（'+ja[0].name+'）':'')};
+$('bMic').onclick=async()=>{
+ if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){st('s2','ng','マイク取得: 不可（getUserMedia非対応。HTTPSでない／iframe内の可能性）');return}
+ st('s2','','マイク取得: 確認中…');let ps='';
+ try{ps=' / permissions: '+(await navigator.permissions.query({name:'microphone'})).state}catch(e){}
+ try{const s=await navigator.mediaDevices.getUserMedia({audio:true});const t=s.getAudioTracks()[0];
+  st('s2','ok','マイク取得: 成功 — '+((t&&t.label)||'ラベルなし')+ps);s.getTracks().forEach(t=>t.stop())}
+ catch(e){st('s2','ng','マイク取得: 失敗 — '+errText(e)+ps)}};
+$('bSR').onclick=async()=>{stopAll();const id=flow;$('rB').className='res';$('rB').textContent='何か話してください…';
+ if(!SR){$('rB').className='res ng';$('rB').textContent='音声認識API なし';return st('s3','ng','音声認識: 利用不可（APIなし）')}
+ st('s3','','音声認識: 起動中…');
+ try{const r=await listen({onInterim:t=>{$('rB').textContent='認識中: '+t}});if(id!==flow)return;
+  st('s3','ok','音声認識: 成功');$('rB').className='res ok';$('rB').textContent='認識結果: '+r.alts.join(' / ')}
+ catch(e){if(id!==flow)return;st('s3','ng','音声認識: 失敗 — '+errText(e));$('rB').className='res ng';$('rB').textContent=errText(e)}};
+</script></body></html>
