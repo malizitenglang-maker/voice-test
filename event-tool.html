@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>イベント走行 記録ツール</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#111;--mut:#666;--bd:#ccc;--ac:#0a64d8;--ok:#0a7a2f;--ng:#c0261b}
+@media(prefers-color-scheme:dark){:root{--bg:#111;--fg:#eee;--mut:#999;--bd:#444;--ac:#4c9bff;--ok:#4fd37d;--ng:#ff6b5e}}
+*{box-sizing:border-box}
+body{margin:0;padding:10px max(10px,env(safe-area-inset-right)) 40px max(10px,env(safe-area-inset-left));background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,"Hiragino Sans",sans-serif}
+#hd{font-size:15px;color:var(--mut)}
+#msg{font-size:26px;font-weight:bold;margin:8px 0;word-break:break-word;min-height:2.4em}
+#heard,#err{font-size:14px;color:var(--mut);word-break:break-all}#err{color:var(--ng)}
+#lst,#cur{font-size:17px;margin:6px 0}
+.row{display:flex;gap:6px}.row>button{flex:1}
+button{min-height:52px;font-size:18px;border:1px solid var(--ac);background:transparent;color:var(--ac);border-radius:10px;margin:3px 0}
+select{width:100%;min-height:52px;font-size:18px;border:1px solid var(--ac);border-radius:10px;background:var(--bg);color:var(--fg);padding:0 8px}
+input[type=text],textarea{width:100%;min-height:44px;font-size:16px;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--fg)}
+table{border-collapse:collapse;width:100%;font-size:14px}td,th{border-bottom:1px solid var(--bd);padding:3px 4px;text-align:left}
+details{margin:10px 0}
+#tbl details{margin:4px 0;border:1px solid var(--bd);border-radius:8px;padding:6px 8px}#tbl summary{font-size:15px}#tbl .sub{font-size:14px;color:var(--mut);margin-top:4px}
+#ov{position:fixed;inset:0;z-index:9;background:var(--ac);color:#fff;font-size:30px;font-weight:bold;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px}
+#ov[hidden]{display:none}
+</style></head><body>
+<div id="ov">タップして開始</div>
+<div class="row"><button id="bPrev" style="flex:0 0 56px">◀</button><select id="sel"></select><button id="bNx" style="flex:0 0 56px">▶</button></div>
+<div id="hd"></div>
+<div id="msg">準備中</div>
+<div id="heard"></div><div id="err"></div>
+<div id="lst"></div>
+<div id="cur"></div>
+<div class="row"><button id="bYes">はい</button><button id="bNo">違う</button><button id="bNext">次</button><button id="bUndo">取り消し</button></div>
+<div class="row"><input type="text" id="man" placeholder="手入力（曲名・ユニット・番号・ポイント）" autocomplete="off"><button id="bSend" style="flex:0 0 80px">送信</button></div>
+<details open><summary>効率ランキング（1位〜・タップで曲を表示）</summary><div id="tbl"></div></details>
+<details><summary>書き出し・設定</summary>
+<button id="bCsv">CSVを表示</button><textarea id="csv" rows="6" hidden></textarea>
+<div><label><input type="checkbox" id="beep" checked> 聞き取り開始のピッ音</label></div>
+<button id="bClr">このセットを空にする</button><button id="bReset">全記録を消す</button></details>
+
+<script id="logic">
+const D=[["ONLY YOUR STARS!","","Trickstar",138],["Stars' Ensemble!","",".ALL",150],["Kiss of Life","","ALKALOID",123],["Rebellion Star","","Trickstar",149],["歓迎☆トゥ・ウィンク雑技団","","2wink",128],["Melody in the Dark","","UNDEAD",148],["魅惑劇","","Valkyrie",119],["Blooming World","","MaM",122],["Voice of Sword","","Knights",147],["終わらないシンフォニア","","fine",150],["Temptation Magic","","Switch",128],["百花繚乱、紅月夜","ひゃっかりょうらんあかつきよ","紅月",134],["Joyful × Box*","","Ra*bits",140],["天下無敵☆メテオレンジャー！","","流星隊",146],["THE GENESIS","","Eden",145],["Crazy Roulette","","Crazy:B",148],["Holy Angel's Carol","","fine",140],["Love Ra*bits Party!!","ラブラビッツパーティ","Ra*bits",139],["Valentine Eve's Nightmare","","UNDEAD",141],["君印 Be Ambitious!!","きみじるしビーアンビシャス","MaM",122],["Silent Oath","","Knights",121],["アンリミテッド☆パワー!!!!!","","流星隊",127],["薄紅色の約束","うすべにいろのやくそく","紅月",141],["Mémoire Antique","","Valkyrie",126],["エメラルドプラネット","","Switch",139],["TRICK with TREAT!!","","2wink",148],["Dance in the Apocalypse","","Eden",129],["Infinite Star","","Trickstar",130],["BRAND NEW STARS!!","",".ALL",119],["Rainbow Stairway","","Jin&Akiomi",135],["あんさんぶる体操！！","","Jin&Akiomi +α",153],["BIGBANG REFLECTION!!","","Trickstar",141],["Walk with your smile","",".ALL",111],["Grateful allegiance","","Knights",121],["翼モラトリアム","","ALKALOID",130],["Be The Party Bee!","","Crazy:B",126],["デートプランA to Z","でーとぷらんえーとぅーじー","シャッフル",142],["Gate of the Abyss","","UNDEAD",140],["Knockin' Fantasy","","Switch",126],["The Tempest Night","","fine",144],["Play ''Tag''","","2wink",134],["楽園追放-Faith Conquest-","","Eden",133],["斬 -決意ノ刃-","ざん　けついのやいば","紅月",143],["Last Lament","","Valkyrie",128],["キセキ","","FUSION",146],["Love it Love it","","Ra*bits",154],["SUPER NOVA REVOLU5TAR","すーぱーのばれぼるすたー","流星隊",136],["HEART→BEATER!!!!","","Trickstar",138],["＝EYE＝","あい","Double Face",137],["Sunlit Smile!","","Eve",135],["Eternal Weaving","","Valkyrie",128],["羽ばたきのフォルティシモ","","fine",141],["Honeycomb Summer","","Crazy:B",146],["メルティ♡キッチン","","Ra*bits",133],["Festive!","","MaM",124],["Living on the edge","","ALKALOID",122],["I \"Witch\" You A Happy Halloween!","","Switch",139],["今宵月の館にて","こよいつきのやかたにて","Valkyrie",134],["Nightless World","","UNDEAD",116],["ハートプリズム・シンメトリー","","2wink",148],["祭夜絵巻","まつりよえまき","紅月",133],["Midnight Butlers","","シャッフル",117],["Fight for Judge","","Knights",144],["Sweet Sweet White Song","","シャッフル",121],["Milky Starry Charm","","Ra*bits",141],["年越しあんさんぶる！！2020→2021","",".ALL",190],["彗星HALATION","","流星隊",138],["PARANOIA STREET","","Crazy:B",141],["Fighting Dreamer","","2wink",142],["Stippling","","Double Face",125],["BREAKTHROUGH!","","Trickstar",143],["紅月いろは唄","あかつきいろはうた","紅月",119],["The Beast of the End","","Adam",118],["Little Romance","","Knights",153],["Distorted Heart","","ALKALOID",138],["オモイノカケラ","","Switch",109],["DESTRUCTION ROAD","","UNDEAD",133],["エンドレスヴィーデ","","シャッフル",143],["恋はプリマヴェーラ！","","fine",137],["流星花火","りゅうせいはなび","流星隊",121],["Walk with your smile Acoustic Ver.","",".ALL",178],["FUSIONIC STARS!!","",".ALL",157],["FALLIN' LOVE=IT'S WONDERLAND","","Ra*bits",152],["Neo Sanctuary","","fine",142],["指先のアリアドネ","","Crazy:B",153],["1st SING-ALONG☆","ふぁーすとしんぐあろんぐ","Trickstar",131],["Majestic Magic","","FUSION",152],["Aisle, be with you","","シャッフル",150],["凱旋歌","","Valkyrie",142],["You're Speculation","","ALKALOID",130],["ポケットに宇宙","","FUSION",148],["Mystic Fragrance","","Knights",132],["Mischievous Party Time!!","","2wink",142],["月下無双、紅の舞","げっかむそうくれないのまい","紅月",146],["ムーンライトディスコ","","シャッフル",128],["Artistic Partisan","","FUSION",153],["メテオ・スクランブル☆流星隊！","めておすくらんぶるりゅうせいたい","流星隊",148],["EXCEED","","Eden",147],["IMMORAL WORLD","","UNDEAD",108],["Crossing×Heart","","FUSION",152],["月光奇譚","げっこうきたん","紅月",156],["Magic for your “Switch”","","Switch",147],["FORBIDDEN RAIN","","UNDEAD",129],["愉快痛快 That's alright!","","MaM",143],["熱血☆流星忍法帖","","流星隊",147],["PERFECTLY-IMPERFECT","","FUSION",146],["Noir Neige","","シャッフル",153],["始まりのファンタジア","","fine",142],["年越しあんさんぶる！！2021→2022","",".ALL",196],["Feathers of Ark","","fine",162],["Deep Eclipse","","Eden",158],["RISKY VENUS","","Crazy:B",116],["青春Emergency","","FUSION",150],["Finder Girl","","Trickstar",151],["Believe 4 leaves","びりーぶふぉーりーぶす","ALKALOID",160],["メイド・イン・トキメキ ♪","","Ra*bits",140],["Swee2wink Love Letter","すうぃーとうぃんくらぶれたー","2wink",146],["Promise Swords","","Knights",159],["Brilliant Smile","","Switch",156],["LEMON SQUASH CHEERS!","","FUSION",133],["Life is so Dramatic‼︎","",".ALL",158],["Acanthe","あこんとぅ","Valkyrie",156],["Awakening Myth","","Eden",139],["BUKUBU NEW STARS!!","",".ALL",122],["CHERRY HAPPY STREAM","","Trickstar",118],["No name yet","","Double Face",144],["Miracle Dream Traveler","","fine",117],["パラダイム・リバーシ！","","シャッフル",139],["Surprising Thanks‼︎","",".ALL",139],["GROWING STARRY DAYS","","流星隊",123],["Daydream×Reality","","Trickstar",144],["Noisy:Beep","","Crazy:B",144],["Sustain Memories","","UNDEAD",159],["U.S.A.","","FUSION",151],["夏鳥の詩 -サマーバード-","なつどりのうた　さまーばーど","紅月",151],["Hysteric Humanoid","","ALKALOID",146],["シュガー・スパイス方程式","","2wink",142],["Romancing Cruise","","Switch",149],["ハム太郎とっとこうた","","FUSION",131],["Coruscate Breeze","","Knights",160],["Trap For You","","Eve",141],["野うさぎマーチ♪","","Ra*bits",127],["FIST OF SOUL","","シャッフル",153],["Tell Your World","","FUSION",156],["VERMILION","","ALKALOID",169],["辻風に吹かれて","","MaM 牛若丸",139],["ハニーミルクはお好みで","","UNDEAD",150],["Ghostic Treat House","","fine",159],["勇侠青春謳","ゆうきょうせいしゅんか","FUSION",160],["Helter-Spider","","Crazy:B",142],["礼賛歌","らいさんか","Valkyrie",138],["Heart aid Cafeteria","","シャッフル",155],["剣戟の舞","けんげきのまい","紅月",132],["(RE)PLAY","りぷれい","FUSION",141],["Have you been naughty or nice?","","シャッフル",138],["Ruler’s Truth","","Adam",132],["年越しあんさんぶる！！2022→2023","",".ALL",211],["HELLO, NEW YEAR!","","MaM",160],["Welcome to the Trickstar Night☆","","Trickstar",129],["ハレノヒSugar Wave","","Ra*bits",145],["スターライトパレード","","FUSION",144],["Colors Arise","","流星隊",150],["Galaxy Destiny","","Switch",125],["Melting Rouge Soul","","Adam",164],["Ruby Love","","Eve",159],["Article of Faith","","Knights",137],["迷宮電子回廊","めいきゅうでんしかいろう","Valkyrie",164],["Eccentric Party Night!!","","シャッフル",139],["夜に駆ける","","FUSION",143],["あんさんぶるトレーニング","","シャッフル",162],["Turbulent Storm","","2wink",150],["Genuine Revelation","","シャッフル",124],["Eccentric Party Night!! 追憶セレクションMix","えきせんとりっくぱーてぃーないとついおくせれくしょんみっくす","シャッフル",170],["Twilight Pentagram","","シャッフル",163],["Dawning Angels","","シャッフル",161],["One with One","",".ALL",161],["Or the Beautiful Golden Drop","","Knights",169],["Crazy Anthem","","Crazy:B",158],["Death Game Holic","","UNDEAD",143],["パラレルメイズ","","Ra*bits",154],["RELAX PARADISE","","流星隊",161],["NA NA NA SUMMER NIGHT BeeAT","","Crazy:B",154],["Bye-Bye Buddy","","Double Face",154],["Crush of Judgment","","Knights",135],["Dreaming Ocean","","fine",156],["ヒカリスペクトル","","Ra*bits",167],["Le temps des fleurs","る・たん・で・ふるーる","Valkyrie",154],["ネビュラ","","Double Face",158],["Love×me⇄monsteR","らぶみーもんすたー","2wink",148],["Angelic Grace","","fine",166],["UNDYING HOLY LOVE","","ALKALOID",159],["祝福のLibrary","","Valkyrie",162],["ROCK ROAR","","シャッフル",150],["Resurrection of Soul","","UNDEAD",159],["金色千夜夢舞台","こんじきせんやゆめぶたい","紅月",157],["トゥウィンクル空中戦","","2wink",138],["Romantic Xday!","","Trickstar",157],["Black Out See Saw","","ALKALOID",146],["僕らのステラ","","流星隊",155],["罪の底","","UNDEAD",165],["Chocola-Tic After School","","Switch",158],["絲","いと","紅月",162],["幸せの歌","","Trickstar",154],["Absolute Perfection","","Eden",161],["NEW DAYBREAK","","流星隊",172],["We’ll be “Knights”","","シャッフル",130],["Luminous Crown","","Knights",154],["両片思いの交差点で、君にまた逢いたくて","","シャッフル",140],["Seven Days ”Prismagic”","","Switch",158],["SAKE OF LOVE","","FUSION",182],["イースター・カーニバル","","Switch",144],["LIMIT BREAK DREAMERS","",".ALL",164],["Ringing evil phone","","シャッフル",160],["KEEP OUT","","Eden",167],["Wonderful Happiness","","Knights",160],["SWINGIN' PARONIRIA","","UNDEAD",139],["うさぎの森の音楽会","","Ra*bits",149],["Twin Wedding Vows","","2wink",135],["ハンズクラフト","","MaM",156],["麗しのナイチンゲール","","Valkyrie",159],["SunnyTrip Summer","","ALKALOID",176],["Psyche’s Butterfly","さいきずばたふらい","Eden",162],["喪失寓意 -LOST BALLADE-","そうしつぐうい　ろすとばらーど","シャッフル",145],["Never-ending Stage!!!!","","fine",147],["A little bit UP!!","","Switch",156],["UTAKATA DANCE FLOOR","","Crazy:B",148],["Castle of my Heart","","Knights",162],["WILDLAND SURVIVOR","","流星隊",140],["夜空、然りとて鵲は","よぞらしかりとてかささぎは","紅月",129],["Heart Heat Beat","","流星隊",159],["Fairy Tale Library","","fine",158],["POLYPHONIC WORLD","","2wink",136],["We Are Light","",".ALL",153],["ハロウィン・ランデブー","","MaM",162],["しょーがいゼッタイそーあい宣言♥","","Special for Princess!",167],["スキスキハンター♡","","Special for Princess!",153],["ワチャガナドゥ？","","Trickstar",159],["Savage Love Affair","","UNDEAD",137],["ベリイ・ベリイ・スイート・ホワイト♡","","Special for Princess!",124],["Unstoppable Love!","","Trickstar",153],["JUMPIN' LUCK BEAT","","Ra*bits",154],["Foolish Alien","","Crazy:B",142],["天翔KAGETSU","","紅月",164],["百花繚乱、紅月夜（2025 ver.）","ひゃっかりょうらんあかつきやにせんにじゅーごばーじょん","紅月",146],["聖少年遊戯","","Valkyrie",142],["星の鳴動響きし時に","","Valkyrie",162],["Across the universe","","ALKALOID",163],["Heart Collector","","Knights",165],["瞬きSign☆","","シャッフル",157],["フュージョン","","シャッフル",138],["KING","","Crazy:B",136],["フラジール","","ALKALOID",126],["B100d Hunter","びーひゃくでぃーはんたー","シャッフル",141],["Wish upon a MUSIC!!","","Switch",162],["セツナDrops","","シャッフル",144],["堕天使たちの晩餐会","","シャッフル",144],["Be My Princess♡","びーまいぷりんせす","Special for Princess!",158],["円環のRefraction","えんかんのりふれくしょん","Eden",151],["LOCK YOUR GAZE","","シャッフル",120],["BRIGHTEST STARS!!","",".ALL",137],["CELEBRATE!!","","Trickstar",156],["僕のウィーク・ポイント","","シャッフル",142],["RAINBOW CIRCUS","","fine",132],["セイクリッド ルイン","","シャッフル",139],["Switching Journey","","Switch",153],["Graceful Punishment","","シャッフル",139],["ハニートラップ・マリアージュ","","Crazy:B",159],["Knights the Phantom Thief","","Knights",136],["来来☆2winkイリュージョン","らいらいつうぃんくいりゅーじょん","2wink",132],["Deep into you","","シャッフル",138],["Wanderlust Sailing","","UNDEAD",136],["君恋志願","","シャッフル",153],["らびゅ&ピース伝説","","シャッフル",159],["夢ノ咲流星隊歌","","流星隊",143],["RaRaRa＊Station!","めらんこりーをかけぬけろ","Ra*bits",166],["Ai☆$!!","あいどる","シャッフル",143],["メランコリーを駆け抜けろ♥","","Special for Princess!",143],["2winkle Star Beat☆","とうぃんくるすたーびーと","2wink",141],["LOUDEST BUGS","","紅月",142],["It's (k)not lov?","","シャッフル",153],["Dream Collection","","Ra*bits",122],["RISE STAR'S SPIRITS","",".ALL",168],["大いなる愛の前に全ては巡り来る","","Eden",155],["それは残像の消失点","","シャッフル",150],["クマクマレスQ","","シャッフル",149],["ハナニナレ！","","Jin&Akiomi",132],["OVERFLOW LIGHT UP!!!!!","","流星隊",147],["催花雨の片道切符","さいかうのかたみちきっぷ","シャッフル",148],["幸福論","","Valkyrie",161],["Darkness 4","","UNDEAD",116],["Musica Vita! -ムジカ・ヴィータ-","","fine",149],["Fight Is Only Fate","","シャッフル",150],["コトノハカンタービレ","","ALKALOID",136],["朧","おぼろ","シャッフル",124],["BRIGHTEST STARS!!（Megasphere ver.）","ぶらいてすとすたーずめがすふぃあばーじょん",".ALL",141],["プロローグのそのあとへ","","シャッフル",134],["Light on the Orbit","","MaM",151],["Dear World","","MELLOW DEAR US",152],["BUBBLE GUM DANCE","","MELLOW DEAR US",140],["炎纏焰踊千変万火","えんてんえんようせんぺんばんか","紅月",156],["ペルソナアビス","","シャッフル",149],["Secret Masquerade","","Knights",153],["虹色のSeasons","","Trickstar",143],["ONLY YOUR STARS!（10th Mix）","おんりーゆあすたーずてんすみっくす",".ALL",143],["CALL YOUR NAME!!","",".ALL",158],["CIVIL WAR","","FUSION",151],["RED GARDEN","","fine",166],["ソロメドレー第1弾","","ソロメドレー",164],["Unbalanced Triangle","","FUSION",150],["EMBRACE","","Eden",151],["Mellow Addiction","","MELLOW DEAR US",132],["The・プリティカルパレード♪","","FUSION",153],["SPLASHING WHIRLPOOL!!","","2wink",160],["ソロメドレー第2弾","","ソロメドレー",159],["Stranger’s Sun","","FUSION",149],["BREAK THE NORM","","流星隊",157],["Secret of Metropolis","","Double Face",119],["E.V.O.L.U.T.I.O.N.","えぼりゅーしょん","FUSION",144],["RAMBLING MOON","","UNDEAD",155],["ソロメドレー第3弾","","ソロメドレー",161],["狂怪ノ怨黙-キョウカイノエンモク-","","FUSION",152],["Nightmare Syndrome♡","","Special for Princess!",160],["ラスト・ページ","","MaM",142],["GET THE WIN","","FUSION",162],["HAO♡RABI","はおらび","Ra*bits",162]];
+const ALIAS={'Trickstar':['トリックスター'],'ALKALOID':['アルカロイド'],'2wink':['ツーウィンク','2ウィンク'],'UNDEAD':['アンデッド'],
+'Valkyrie':['ヴァルキリー','バルキリー'],'Knights':['ナイツ'],'Ra*bits':['ラビッツ'],'Switch':['スイッチ'],'Crazy:B':['クレイジービー'],
+'紅月':['あかつき','べにつき'],'fine':['ファイン'],'流星隊':['りゅうせいたい'],'Eden':['エデン'],'Adam':['アダム'],'Eve':['イブ','イヴ'],
+'MaM':['マム','エムエーエム'],'Double Face':['ダブルフェイス'],'Special for Princess!':['スペシャルフォープリンセス'],'FUSION':['フュージョン'],'.ALL':['オール']};
+const norm=s=>(s||'').normalize('NFKC').toLowerCase().replace(/[\u30a1-\u30f6]/g,c=>String.fromCharCode(c.charCodeAt(0)-96)).replace(/[\s!?,.'"~:*&=\/()\[\]\-_・☆★♡♥、。！？「」『』“”‘’〜]/g,'');
+const S=D.map((d,i)=>({i,t:d[0],r:d[1],u:d[2],s:d[3],k:norm(d[0]),kr:norm(d[1])}));
+const UN=[...new Set(S.map(s=>s.u))].map(u=>({u,keys:[norm(u),...(ALIAS[u]||[]).map(norm)]}));
+function find(q,used){
+ const n=norm(q);if(!n)return null;const free=s=>!used.has(s.i);
+ const un=us=>({type:'unit',name:us.map(x=>x.u).join('・'),list:S.filter(s=>us.some(x=>x.u===s.u)&&free(s))});
+ let us=UN.filter(x=>x.keys.some(k=>k===n||(n.length>=3&&k.startsWith(n))));
+ if(us.length)return un(us);
+ const ex=S.filter(s=>free(s)&&(s.k===n||(s.kr&&s.kr===n)));
+ if(ex.length)return{type:'song',list:ex};
+ if(n.length>=2){
+  const pt=S.filter(s=>free(s)&&(s.k.includes(n)||(s.kr&&s.kr.includes(n))||(n.length>=4&&s.k.length>=4&&n.includes(s.k))));
+  if(pt.length)return{type:'song',list:pt};
+  us=UN.filter(x=>x.keys.some(k=>k.includes(n)||(k.length>=4&&n.includes(k))));
+  if(us.length)return un(us)}
+ return null}
+const KD={'〇':0,'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9};
+function parsePt(text){
+ let s=(text||'').normalize('NFKC').replace(/[,\s]|ポイント|pt|点/gi,'').replace(/[〇零一二三四五六七八九]/g,c=>KD[c]);
+ if(!s||/[^\d万千百十]/.test(s))return null;
+ const small=t=>{let n=0;for(const [u,m] of [['千',1000],['百',100],['十',10]]){const i=t.indexOf(u);if(i>=0){const d=t.slice(0,i);n+=(d===''?1:+d)*m;t=t.slice(i+1)}}return t===''?n:(/^\d+$/.test(t)?n+ +t:NaN)};
+ let v;const i=s.indexOf('万');
+ if(i>=0){const a=s.slice(0,i),b=s.slice(i+1);v=(a===''?1:small(a))*10000+(b===''?0:small(b))}else v=small(s);
+ return Number.isFinite(v)&&v>=0&&v<10000000?v:null}
+const NW={'いち':1,'1':1,'ワン':1,'に':2,'2':2,'ツー':2,'さん':3,'3':3,'スリー':3,'よん':4,'し':4,'4':4,'フォー':4,'ご':5,'5':5,'ファイブ':5};
+function pickNum(al){for(const a of al){let t=a.normalize('NFKC').replace(/\s/g,'').replace(/(ばんめ|ばん|番目|番|目)$/,'').replace(/[一二三四五]/g,c=>'一二三四五'.indexOf(c)+1);
+ const h=norm(t);for(const k in NW)if(norm(k)===h)return NW[k];if(/^[1-5]$/.test(t))return +t}return null}
+const YES=/^(はい|ハイ|yes|うん|ええ|そう|オッケー|ok)/i,NO=/(違|ちが|チガ|いいえ|イイエ|ノー|だめ|ダメ)/i,NEXT=/(次|つぎ|ツギ|ネクスト|next)/i,UNDO=/(取り消|取消|とりけし|トリケシ|消して|けして)/i;
+function kind(al,allow){for(const a of al){const s=a.replace(/\s/g,'');if(s.length>8)continue;
+ if(allow.includes('undo')&&UNDO.test(s))return 'undo';if(allow.includes('no')&&NO.test(s))return 'no';
+ if(allow.includes('next')&&NEXT.test(s))return 'next';if(allow.includes('yes')&&YES.test(s))return 'yes'}return null}
+</script>
+
+<script id="ui">
+const $=id=>document.getElementById(id);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const CAUSE={'not-allowed':'マイクまたは音声認識が許可されていません（Safariのマイク設定、iOSの音声入力/Siri、HTTPS、ボタン操作以外からの開始の可能性）。',
+'service-not-allowed':'音声認識サービスが許可されていません。','audio-capture':'マイクを取得できません。','network':'音声認識サービスに接続できません。','unsupported':'音声認識APIがありません。'};
+const errText=e=>`${e.name||'Error'}${e.message?'（'+e.message+'）':''}：${CAUSE[e.name]||''}`;
+let st={sets:{},n:1},ph='search',cands=[],page=0,pick=null,lname='',note='',tok=0,silent=0,curRec=null,actx=null,started=false;
+try{const j=JSON.parse(localStorage.getItem('ev2')||'null');if(j&&j.sets&&j.n)st=j}catch(e){}
+const save=()=>{try{localStorage.setItem('ev2',JSON.stringify(st))}catch(e){}};
+const cur=()=>st.sets[st.n]||(st.sets[st.n]=[]);
+const isDone=s=>!!s&&s.length>=4&&s.every(x=>x.p!=null);
+{const c=cur();if(c.length&&c[c.length-1].p==null)ph='points'}
+const used=()=>new Set(Object.values(st.sets).flat().map(x=>x.i));
+const stat=songs=>{const pts=songs.reduce((a,x)=>a+(x.p||0),0),sec=songs.reduce((a,x)=>a+S[x.i].s,0);return{pts,sec,eff:pts/(sec/60)}};
+const fmt=s=>Math.floor(s/60)+'分'+String(s%60).padStart(2,'0')+'秒';
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const msg=t=>{$('msg').textContent=t};
+const langOf=s=>/[\u3040-\u30ff\u4e00-\u9fff]/.test(s)?'ja-JP':/[àâçéèêëîïôùûüÿœæ]/i.test(s)?'fr-FR':'en-US';
+function speak(text,lang){return new Promise((res,rej)=>{
+ if(!window.speechSynthesis)return rej(new Error('speechSynthesis非対応'));
+ speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang=lang||langOf(text);
+ const v=speechSynthesis.getVoices().find(v=>v.lang.replace('_','-')===u.lang);if(v)u.voice=v;
+ const to=setTimeout(()=>rej(new Error('読み上げが終了しません')),20000);
+ u.onend=()=>{clearTimeout(to);res()};u.onerror=e=>{clearTimeout(to);rej(new Error('TTS: '+(e.error||'不明')))};
+ speechSynthesis.speak(u)})}
+function beep(){if(!$('beep').checked)return;try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);g.gain.value=.15;o.frequency.value=880;o.start();o.stop(actx.currentTime+.12)}catch(e){}}
+function listen(onI){return new Promise((resolve,reject)=>{
+ if(!SR)return reject({name:'unsupported'});
+ const r=new SR();curRec=r;r.lang='ja-JP';r.interimResults=true;r.maxAlternatives=5;r.continuous=false;let done=false;
+ const fin=(v,err)=>{if(done)return;done=true;clearTimeout(t);try{r.abort()}catch(e){}err?reject(err):resolve(v)};
+ const t=setTimeout(()=>fin(null,{name:'timeout'}),10000);
+ r.onresult=e=>{const x=e.results[e.results.length-1];const a=[...x].map(y=>y.transcript);onI&&onI(a[0]);if(x.isFinal)fin(a)};
+ r.onerror=e=>fin(null,{name:e.error,message:e.message});r.onend=()=>fin(null,{name:'no-result'});
+ try{r.start()}catch(e){fin(null,{name:e.name,message:e.message})}})}
+
+const MSG={search:'曲名かユニット名を',list:'番号を言う（次／違う）',confirm:'はい／違う',points:'ポイントを'};
+async function step(skip){
+ const my=++tok;$('ov').hidden=true;
+ try{
+  if(!skip){
+   if(ph==='search'){msg(note||MSG.search);await speak(note||'どうぞ','ja-JP');note=''}
+   else if(ph==='list')await readPage(my);
+   else if(ph==='confirm'){msg(pick.t+' ですか？');await speak(pick.t);if(my!==tok)return;await speak('ですか？','ja-JP')}
+   else if(ph==='points'){msg('ポイントを');await speak('ポイント','ja-JP')}
+   if(my!==tok)return}
+  msg(ph==='confirm'?pick.t+'（はい／違う）':MSG[ph]);beep();
+  const al=await listen(t=>{$('heard').textContent='認識中: '+t});
+  if(my!==tok)return;silent=0;$('err').textContent='';$('heard').textContent='認識: '+al.join(' / ');handle(al)
+ }catch(e){if(my!==tok)return;
+  if(['no-speech','timeout','no-result','aborted'].includes(e.name)&&++silent<=5)return step(true);
+  silent=0;$('err').textContent=errText(e);$('ov').textContent='画面をタップして再開';$('ov').hidden=false}}
+async function readPage(my){
+ const a=cands.slice(page*5,page*5+5);$('lst').innerHTML=a.map((s,k)=>`${k+1}番 ${esc(s.t)}`).join('<br>');msg(lname+'（'+cands.length+'曲）');
+ if(page===0)await speak(lname+'、'+cands.length+'曲','ja-JP');
+ for(let k=0;k<a.length;k++){if(my!==tok)return;await speak((k+1)+'番','ja-JP');if(my!==tok)return;await speak(a[k].t)}}
+function handle(al){
+ if(kind(al,['undo'])==='undo')return undo();
+ if(ph==='search'){const sn=setCmd(al);if(sn)return goSet(sn);
+  if(cur().length>=4){note='4曲そろっています、取り消しで直せます';return step()}
+  let r=null;for(const a of al){r=find(a,used());if(r)break}
+  if(!r){note='見つかりません、もう一度';return step()}
+  if(!r.list.length){note='その曲は使い切りました、もう一度';return step()}
+  if(r.list.length===1){pick=r.list[0];ph='confirm'}else{cands=r.list;page=0;lname=r.type==='unit'?r.name:'候補';ph='list';$('lst').innerHTML=''}
+  return step()}
+ if(ph==='confirm'){const x=kind(al,['yes','no']);if(x==='yes')return rec(pick);
+  if(x==='no'){ph='search';note='もう一度';return step()}return step(true)}
+ if(ph==='list'){const x=kind(al,['no','next']);
+  if(x==='no'){ph='search';note='もう一度';$('lst').innerHTML='';return step()}
+  if(x==='next'){page=(page+1)*5>=cands.length?0:page+1;return step()}
+  const n=pickNum(al),s=n&&cands[page*5+n-1];if(s)return rec(s);return step(true)}
+ if(ph==='points'){let n=null;for(const a of al){n=parsePt(a);if(n!=null)break}
+  if(n==null){msg('数字で言ってください');return step(true)}return setPts(n)}}
+function rec(s){cur().push({i:s.i,p:null});save();$('lst').innerHTML='';ph='points';render();step()}
+async function setPts(n){const my=++tok,c=cur();c[c.length-1].p=n;save();render();
+ try{await speak(n+'ポイント','ja-JP')}catch(e){}
+ if(my!==tok)return;if(c.length>=4)return finish();ph='search';note='';step()}
+async function finish(){const my=++tok,no=st.n,x=stat(cur());
+ const all=Object.values(st.sets).filter(isDone).map(s=>stat(s).eff);const best=all.length>1&&all.every(e=>e<=x.eff);
+ let nx=0;for(let k=1;k<=30&&!nx;k++){const m=(no+k-1)%30+1;if((st.sets[m]||[]).length<4)nx=m}
+ if(nx)st.n=nx;save();render();ph='search';note='';
+ try{await speak(`セット${no}、合計${x.pts}ポイント、${Math.floor(x.sec/60)}分${x.sec%60}秒、毎分${Math.round(x.eff)}ポイント${best?'、今のところ最高':''}。`+(nx?`次はセット${nx}`:'30セットそろいました'),'ja-JP')}catch(e){}
+ if(my===tok)step()}
+function halt(){tok++;try{speechSynthesis.cancel()}catch(e){}try{curRec&&curRec.abort()}catch(e){}}
+function setCmd(al){for(const a of al){const s=a.normalize('NFKC').replace(/\s/g,'');if(s.length>9)continue;
+ const m=s.match(/セット([0-9一二三四五六七八九十]+)/)||s.match(/([0-9一二三四五六七八九十]+)セット/);
+ if(m){const n=parsePt(m[1]);if(n>=1&&n<=30)return n}}return null}
+function goSet(n){halt();st.n=n;save();render();$('lst').innerHTML='';const c=cur();
+ ph=c.length&&c[c.length-1].p==null?'points':'search';
+ note=ph==='points'?'':c.length>=4?`セット${n}、4曲そろっています`:`セット${n}、${c.length?c.length+'曲':'どうぞ'}`;step()}
+function undo(){halt();const x=cur().pop();save();render();$('lst').innerHTML='';ph='search';
+ note=x?'取り消しました':'取り消す記録がありません';step()}
+function send(t){if(!started)return;halt();handle([t])}
+function render(){
+ $('hd').textContent=`使用済み ${used().size}/${S.length}曲`;
+ const sel=$('sel');sel.innerHTML=Array.from({length:30},(_,k)=>{const m=k+1,s=st.sets[m]||[];
+  return`<option value="${m}">セット${m}　${isDone(s)?'✓ 毎分'+stat(s).eff.toFixed(0):s.length?s.length+'/4曲':'空'}</option>`}).join('');sel.value=st.n;
+ $('cur').innerHTML=cur().map((x,k)=>`${k+1}. ${esc(S[x.i].t)} … ${x.p==null?'—':x.p+'pt'}`).join('<br>');
+ const rows=Object.entries(st.sets).filter(([k,s])=>isDone(s)).map(([k,s])=>({k:+k,s,...stat(s)})).sort((a,b)=>b.eff-a.eff);
+ $('tbl').innerHTML=rows.length?rows.map((r,j)=>`<details><summary><b>${j+1}位</b>　セット${r.k}　毎分${r.eff.toFixed(1)}pt${j?'（1位の'+Math.round(r.eff/rows[0].eff*100)+'%）':''}</summary><div class="sub">合計 ${r.pts}pt ／ ${fmt(r.sec)}<br>${r.s.map((x,n)=>`${n+1}. ${esc(S[x.i].t)}（${esc(S[x.i].u)}・${fmt(S[x.i].s)}）${x.p}pt`).join('<br>')}</div></details>`).join(''):'まだありません（4曲そろったセットが並びます）'}
+$('ov').onclick=()=>{if(!started){started=true;if(window.speechSynthesis)speechSynthesis.getVoices();return step()}step(true)};
+$('bYes').onclick=()=>send('はい');$('bNo').onclick=()=>send('違う');$('bNext').onclick=()=>send('次');$('bUndo').onclick=()=>send('取り消し');
+$('bSend').onclick=()=>{const v=$('man').value.trim();if(v){$('man').value='';send(v)}};
+$('sel').onchange=()=>goSet(+$('sel').value);$('bPrev').onclick=()=>goSet(Math.max(1,st.n-1));$('bNx').onclick=()=>goSet(Math.min(30,st.n+1));
+$('bCsv').onclick=()=>{const L=['セット,曲名,ユニット,pt,秒'];Object.keys(st.sets).map(Number).sort((a,b)=>a-b).forEach(k=>st.sets[k].forEach(x=>L.push([k,'"'+S[x.i].t.replace(/"/g,'""')+'"',S[x.i].u,x.p,S[x.i].s].join(','))));
+ $('csv').value=L.join('\n');$('csv').hidden=false};
+$('bClr').onclick=()=>{if(confirm('セット'+st.n+'を空にします。よろしいですか？')){halt();st.sets[st.n]=[];save();ph='search';$('lst').innerHTML='';render();note='セット'+st.n+'を空にしました';step()}};
+$('bReset').onclick=()=>{if(confirm('全部の記録を消します。よろしいですか？')){halt();st={sets:{},n:1};save();ph='search';$('lst').innerHTML='';render();note='';step()}};
+render();
+</script></body></html>
